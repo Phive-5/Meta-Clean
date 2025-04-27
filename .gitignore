@@ -1,0 +1,19 @@
+# Node.js ignores
+node_modules/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+
+# Docker temporary files
+*.docker
+
+# IDE files
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
