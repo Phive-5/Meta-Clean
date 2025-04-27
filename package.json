@@ -1,0 +1,19 @@
+{
+  "name": "phive-metaclean-docker",
+  "version": "1.0.0",
+  "description": "A Docker-friendly version of Phive-MetaClean for scanning and cleaning video metadata.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "fs-extra": "^11.1.0",
+    "cors": "^2.8.5",
+    "fluent-ffmpeg": "^2.1.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

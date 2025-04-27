@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video MetaClean</title>
+    <link rel="icon" type="image/png" href="icons/icon.png">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #121212;
+            color: #ffffff;
+        }
+        h1 {
+            color: #00ff00;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        select, input[type="text"], button {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #00ff00;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            border-radius: 5px;
+        }
+        button {
+            cursor: pointer;
+            background-color: #00ff00;
+            color: #000000;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #00cc00;
+        }
+        #directoryInput {
+            flex-grow: 1;
+        }
+        .results {
+            margin-top: 20px;
+            overflow-x: auto; /* Enable horizontal scrolling */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            table-layout: fixed; /* Fix the table layout */
+        }
+        th, td {
+            border: 1px solid #00ff00;
+            padding: 8px;
+            text-align: left;
+            white-space: nowrap; /* Prevent text wrapping */
+            overflow: hidden; /* Hide overflow content */
+            text-overflow: ellipsis; /* Show ellipsis for overflow text */
+        }
+        th {
+            background-color: #1a1a1a;
+            cursor: pointer;
+        }
+        th:hover {
+            background-color: #2a2a2a;
+        }
+        tr:nth-child(even) {
+            background-color: #1e1e1e;
+        }
+        tr:hover {
+            background-color: #2a2a2a;
+        }
+        .selected {
+            background-color: rgba(0, 255, 0, 0.3);
+        }
+        .tooltip {
+            position: absolute;
+            background-color: #1a1a1a;
+            color: #00ff00;
+            padding: 5px;
+            border: 1px solid #00ff00;
+            border-radius: 3px;
+            max-width: 300px;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+            white-space: pre-wrap; /* Allow text to wrap */
+        }
+        #scanStatus, #cleanStatus {
+            display: none;
+            color: #00ff00;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Video MetaClean</h1>
+        <div class="controls">
+            <select id="directorySelect" onchange="updateInputField(this.value)">
+                <option value="">-- Select Directory --</option>
+            </select>
+            <input type="text" id="directoryInput" placeholder="Enter directory path or select from dropdown">
+            <button onclick="scanDirectory()">Scan Directory</button>
+        </div>
+        <div id="scanStatus"></div>
+        <div id="resultsCount"></div>
+        <div class="controls">
+            <button id="selectAllBtn" onclick="selectAll()" style="display: none;">Select All</button>
+            <button id="deselectAllBtn" onclick="deselectAll()" style="display: none;">Deselect All</button>
+            <button id="cleanBtn" onclick="cleanMetadata()" style="display: none;">Clean Metadata</button>
+        </div>
+        <div id="cleanStatus"></div>
+        <div class="results" id="resultsTable"></div>
+    </div>
+    <div id="tooltip" class="tooltip"></div>
+    <script src="app.js"></script>
+    <script>
+        // Show tooltip on hover
+        document.addEventListener('mousemove', function(e) {
+            const tooltip = document.getElementById('tooltip');
+            const target = e.target.tagName === 'TD' ? e.target : e.target.closest('td');
+            if (target && target.querySelector('.tooltip')) {
+                const tooltipContent = target.querySelector('.tooltip');
+                tooltip.textContent = tooltipContent.textContent;
+                tooltip.style.display = 'block';
+                tooltip.style.left = e.pageX + 10 + 'px';
+                tooltip.style.top = e.pageY + 10 + 'px';
+            } else {
+                tooltip.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
