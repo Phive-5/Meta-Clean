@@ -16,7 +16,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Get BASE_DIRS from environment variable or default to an empty array
 const BASE_DIRS = process.env.BASE_DIRS ? process.env.BASE_DIRS.split(',').map(dir => dir.trim()) : [];
 
-// Utility to check if a path is within BASE_DIRS
+/**
+ * Checks if a given file path is within the allowed base directories.
+ * @param {string} filePath - The file path to check.
+ * @returns {boolean} - True if the path is allowed, false otherwise.
+ */
 function isPathAllowed(filePath) {
     console.log('Checking if path is allowed:', filePath);
     return BASE_DIRS.some(baseDir => {
@@ -28,7 +32,9 @@ function isPathAllowed(filePath) {
     });
 }
 
-// Endpoint to get list of base directories or subdirectories dynamically
+/**
+ * Endpoint to get list of base directories or subdirectories dynamically.
+ */
 app.get('/api/directories', async (req, res) => {
     console.log('GET /api/directories request received');
     try {
@@ -55,7 +61,9 @@ app.get('/api/directories', async (req, res) => {
     }
 });
 
-// Endpoint to scan directory for video files with metadata
+/**
+ * Endpoint to scan directory for video files with metadata.
+ */
 app.post('/api/scan', async (req, res) => {
     console.log('POST /api/scan request received');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
@@ -86,7 +94,11 @@ app.post('/api/scan', async (req, res) => {
     }
 });
 
-// Function to scan directory
+/**
+ * Scans a directory recursively for video files and extracts metadata.
+ * @param {string} dirPath - The directory path to scan.
+ * @returns {Promise<Object>} - Object containing total files scanned and video files with metadata.
+ */
 async function scanDirectory(dirPath) {
     console.log('Scanning directory:', dirPath);
     let totalFiles = 0;
@@ -99,125 +111,154 @@ async function scanDirectory(dirPath) {
 
         for (const entry of entries) {
             const fullPath = path.join(dirPath, entry.name);
-            console.log('Processing entry:', fullPath);
-
             if (entry.isDirectory()) {
-                console.log(`${fullPath} is a directory, recursing...`);
-                const subDirResults = await scanDirectory(fullPath);
-                totalFiles += subDirResults.totalFiles;
-                videoFiles = videoFiles.concat(subDirResults.videoFiles);
+                console.log(`Entering subdirectory: ${fullPath}`);
+                const subResults = await scanDirectory(fullPath);
+                totalFiles += subResults.totalFiles;
+                videoFiles = videoFiles.concat(subResults.videoFiles);
             } else if (entry.isFile()) {
                 totalFiles++;
-                console.log(`Checking if ${fullPath} is a video file`);
-                const extension = path.extname(entry.name).toLowerCase();
-                const videoExtensions = ['.mp4', '.mkv', '.mov', '.avi'];
-
-                if (videoExtensions.includes(extension)) {
-                    console.log(`${fullPath} is a video file, extracting metadata`);
+                const ext = path.extname(entry.name).toLowerCase();
+                if (['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm'].includes(ext)) {
+                    console.log(`Processing video file: ${fullPath}`);
                     try {
                         const metadata = await getVideoMetadata(fullPath);
-                        if (metadata.title || metadata.comments) {
-                            console.log(`Video file with metadata found: ${fullPath}`);
+                        if (metadata && (metadata.title || metadata.comment || metadata.comments)) {
+                            console.log(`Found metadata in ${entry.name}:`, {
+                                title: metadata.title || 'None',
+                                comment: metadata.comment || metadata.comments || 'None'
+                            });
                             videoFiles.push({
+                                name: entry.name,
                                 path: fullPath,
-                                filename: entry.name,
                                 title: metadata.title || '',
-                                comments: metadata.comments || ''
+                                comment: metadata.comment || metadata.comments || ''
                             });
                         } else {
-                            console.log(`No relevant metadata found for ${fullPath}`);
+                            console.log(`No relevant metadata found in ${entry.name}`);
                         }
                     } catch (err) {
-                        console.error(`Error extracting metadata from ${fullPath}:`, err);
+                        console.error(`Error processing ${fullPath}:`, err);
                     }
                 } else {
-                    console.log(`${fullPath} is not a video file (extension: ${extension})`);
+                    console.log(`Skipping non-video file: ${fullPath}`);
                 }
-            } else {
-                console.log(`${fullPath} is neither a file nor directory, skipping`);
             }
         }
     } catch (error) {
         console.error(`Error reading directory ${dirPath}:`, error);
-        throw new Error(`Failed to scan directory ${dirPath}: ${error.message}`);
     }
 
-    console.log(`Finished scanning ${dirPath}. Total files: ${totalFiles}, Video files with metadata: ${videoFiles.length}`);
     return { totalFiles, videoFiles };
 }
 
-// Function to get video metadata using fluent-ffmpeg
-function getVideoMetadata(filePath) {
-    console.log('Getting metadata for:', filePath);
+/**
+ * Extracts metadata from a video file using fluent-ffmpeg.
+ * @param {string} filePath - Path to the video file.
+ * @returns {Promise<Object>} - Metadata object containing tags.
+ */
+async function getVideoMetadata(filePath) {
     return new Promise((resolve, reject) => {
         ffmpeg.ffprobe(filePath, (err, metadata) => {
             if (err) {
-                console.error(`Error probing ${filePath}:`, err);
-                return resolve({ title: '', comments: '' });
+                console.error(`ffprobe error for ${filePath}:`, err);
+                return reject(err);
             }
-            console.log(`Metadata retrieved for ${filePath}`);
-            const tags = metadata.format.tags || {};
-            console.log(`Format tags for ${filePath}:`, tags);
-            resolve({
-                title: tags.title || '',
-                comments: tags.comment || tags.COMMENT || ''
-            });
+            resolve(metadata.format.tags || {});
         });
     });
 }
 
-// Endpoint to clean metadata for selected files
+/**
+ * Endpoint to clean metadata for selected files.
+ */
 app.post('/api/clean', async (req, res) => {
     console.log('POST /api/clean request received');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
     const { files } = req.body;
 
-    if (!Array.isArray(files) || files.length === 0) {
-        console.log('Invalid file list provided for cleaning');
-        return res.status(400).json({ error: 'No files provided' });
+    if (!files || !Array.isArray(files) || files.length === 0) {
+        console.log('No valid files provided for cleaning:', files);
+        return res.status(400).json({ error: 'No files provided for cleaning' });
     }
 
-    const cleanedFiles = [];
-    const errors = [];
+    // Validate all file paths before processing
+    const invalidFiles = files.filter(file => !isPathAllowed(file));
+    if (invalidFiles.length > 0) {
+        console.log('Access denied to some files:', invalidFiles);
+        return res.status(400).json({ error: 'Access denied to one or more files' });
+    }
 
-    for (const filePath of files) {
-        if (!isPathAllowed(filePath)) {
-            console.log('Access denied to file outside allowed directories:', filePath);
-            errors.push({ file: filePath, error: 'Access denied' });
-            continue;
-        }
-        try {
+    console.log(`Cleaning metadata for ${files.length} files`);
+    try {
+        let successful = 0;
+        let failed = 0;
+        const errors = [];
+
+        for (const filePath of files) {
             console.log(`Cleaning metadata for: ${filePath}`);
-            await cleanMetadata(filePath);
-            cleanedFiles.push(filePath);
-        } catch (error) {
-            console.error(`Error cleaning metadata for ${filePath}:`, error);
-            errors.push({ file: filePath, error: error.message });
+            try {
+                const result = await cleanMetadata(filePath);
+                if (result.success) {
+                    successful++;
+                    console.log(`Successfully cleaned metadata for: ${filePath}`);
+                } else {
+                    failed++;
+                    errors.push(`Failed to clean ${filePath}: ${result.error}`);
+                    console.error(`Failed to clean metadata for: ${filePath}`, result.error);
+                }
+            } catch (error) {
+                failed++;
+                errors.push(`Error cleaning ${filePath}: ${error.message}`);
+                console.error(`Error cleaning metadata for: ${filePath}`, error);
+            }
         }
-    }
 
-    console.log(`Metadata cleaning complete. Cleaned: ${cleanedFiles.length}, Errors: ${errors.length}`);
-    res.json({
-        cleaned_files: cleanedFiles,
-        errors: errors
-    });
+        console.log(`Cleaning completed. Successful: ${successful}, Failed: ${failed}`);
+        if (failed === 0) {
+            res.json({ message: `Successfully cleaned metadata from ${successful} file(s)` });
+        } else {
+            res.status(500).json({ 
+                message: `Cleaned ${successful} file(s), failed on ${failed} file(s)`, 
+                errors: errors 
+            });
+        }
+    } catch (error) {
+        console.error('Unexpected error during cleaning:', error);
+        res.status(500).json({ error: 'Unexpected error during cleaning: ' + error.message });
+    }
 });
 
-// Function to clean metadata using Python script
-function cleanMetadata(filePath) {
-    console.log('Initiating metadata cleaning for:', filePath);
-    return new Promise((resolve, reject) => {
-        const command = `python3 clean_metadata.py "${filePath}"`;
-        console.log(`Executing command: ${command}`);
+/**
+ * Cleans metadata from a video file using a Python script.
+ * @param {string} filePath - Path to the video file.
+ * @returns {Promise<Object>} - Result object with success status and error if any.
+ */
+async function cleanMetadata(filePath) {
+    return new Promise((resolve) => {
+        console.log(`Executing Python script to clean metadata for: ${filePath}`);
+        const command = `python3 clean_metadata.py "${filePath.replace(/"/g, '\"')}"`;
+        console.log(`Command: ${command}`);
         exec(command, (error, stdout, stderr) => {
             if (error) {
                 console.error(`Error executing Python script for ${filePath}:`, error);
-                console.error(stderr);
-                return reject(new Error(`Failed to clean metadata: ${error.message}`));
+                console.error(`stderr: ${stderr}`);
+                resolve({ success: false, error: error.message });
+                return;
             }
-            console.log(stdout);
-            console.log('Metadata cleaning completed for:', filePath);
-            resolve();
+            try {
+                console.log(`Python script output for ${filePath}:`, stdout);
+                const result = JSON.parse(stdout);
+                if (result && result.length > 0 && result[0].status === 'success') {
+                    resolve({ success: true });
+                } else {
+                    resolve({ success: false, error: result[0].message || 'Unknown error from script' });
+                }
+            } catch (parseError) {
+                console.error(`Failed to parse Python script output for ${filePath}:`, parseError);
+                console.error(`stdout was: ${stdout}`);
+                resolve({ success: false, error: 'Failed to parse script output' });
+            }
         });
     });
 }

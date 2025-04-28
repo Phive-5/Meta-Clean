@@ -1,14 +1,18 @@
 # Base image with Node.js
 FROM node:18-alpine
 
-# Install FFmpeg for metadata handling
+# Install ffmpeg for video processing
 RUN apk add --no-cache ffmpeg
 
-# Install Python and pip for metadata cleaning script
+# Install Python and pip for mutagen
 RUN apk add --no-cache python3 py3-pip
 
-# Install mutagen for Python metadata cleaning
+# Install mutagen and additional dependencies for MKV support
 RUN pip3 install mutagen --break-system-packages
+RUN pip3 install pymediainfo --break-system-packages
+
+# Install exiftool for metadata manipulation
+RUN apk add --no-cache exiftool
 
 # Set working directory
 WORKDIR /app
@@ -17,11 +21,16 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Copy application code
+# Copy the rest of the application
 COPY . .
 
-# Expose port for the application
+# Expose the port
 EXPOSE 3000
 
+# Add Unraid labels
+LABEL net.unraid.icon="https://raw.githubusercontent.com/yourusername/yourrepository/main/icon.png"
+LABEL net.unraid.description="Phive-MetaClean-Docker - A tool to clean metadata from video files"
+LABEL net.unraid.category="Media Tools"
+
 # Command to run the application
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

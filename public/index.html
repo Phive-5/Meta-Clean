@@ -3,143 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video MetaClean</title>
+    <title>(5) Video MetaClean</title>
     <link rel="icon" type="image/png" href="icons/icon.png">
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #121212;
-            color: #ffffff;
-        }
-        h1 {
-            color: #00ff00;
+            margin: 20px;
+            background-color: #111;
+            color: #fff;
+            overflow: auto; /* Allow scrolling for the whole page */
         }
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
             position: relative;
             z-index: 1;
-        }
-        .controls {
-            margin-bottom: 20px;
             display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
+            flex-direction: column;
+            max-width: 1200px;
+            margin: 0 auto;
         }
-        select, input[type="text"], button {
-            padding: 10px;
-            font-size: 16px;
-            border: 1px solid #00ff00;
-            background-color: #1e1e1e;
-            color: #ffffff;
-            border-radius: 5px;
-        }
-        button {
-            cursor: pointer;
-            background-color: #00ff00;
-            color: #000000;
-            font-weight: bold;
-        }
-        button:hover {
-            background-color: #00cc00;
-        }
-        #directoryInput {
-            flex-grow: 1;
-        }
-        .results {
+        .results-container {
+            flex: 1;
+            overflow-y: auto;
             margin-top: 20px;
-            overflow-x: auto; /* Enable horizontal scrolling */
+            padding-bottom: 20px; /* Added padding to ensure last row is visible */
+            height: calc(100vh - 250px); /* Adjust height to account for other elements */
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
-            table-layout: fixed; /* Fix the table layout */
+            table-layout: auto;
+            background: rgba(0, 0, 0, 0.7);
         }
         th, td {
-            border: 1px solid #00ff00;
+            border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
-            white-space: nowrap; /* Prevent text wrapping */
-            overflow: hidden; /* Hide overflow content */
-            text-overflow: ellipsis; /* Show ellipsis for overflow text */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 200px;
+            position: relative;
+            color: #fff;
         }
         th {
-            background-color: #1a1a1a;
+            background-color: #333;
             cursor: pointer;
+            user-select: none;
+            position: sticky;
+            top: 0;
+            z-index: 2;
         }
         th:hover {
-            background-color: #2a2a2a;
-        }
-        tr:nth-child(even) {
-            background-color: #1e1e1e;
+            background-color: #444;
         }
         tr:hover {
-            background-color: #2a2a2a;
+            background-color: #222;
         }
-        .selected {
-            background-color: rgba(0, 255, 0, 0.3);
+        tr.selected {
+            background-color: #004d40;
         }
         .tooltip {
+            visibility: hidden;
             position: absolute;
-            background-color: #1a1a1a;
-            color: #00ff00;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
             padding: 5px;
-            border: 1px solid #00ff00;
-            border-radius: 3px;
+            border-radius: 5px;
+            z-index: 10;
             max-width: 300px;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: normal;
+            font-size: 0.9em;
             pointer-events: none;
-            z-index: 1000;
-            display: none;
-            white-space: pre-wrap; /* Allow text to wrap */
         }
-        #scanStatus, #cleanStatus {
-            display: none;
-            color: #00ff00;
-            font-weight: bold;
+        td:hover .tooltip {
+            visibility: visible;
+        }
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .input-field {
+            padding: 8px;
+            margin: 5px 10px 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #222;
+            color: #fff;
+            width: 300px; /* Fixed width to prevent stretching */
+        }
+        .button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin: 5px;
+            width: 150px; /* Fixed width for buttons */
+            text-align: center;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .mt-3 {
+            margin-top: 1rem;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .note {
+            font-size: 0.9em;
+            color: #aaa;
+            margin-top: 0;
+        }
+        #status {
             margin-top: 10px;
+            font-weight: bold;
+            color: #00ff00;
+        }
+        #notification {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 300px;
+            z-index: 1000;
+        }
+        #notification.success {
+            background-color: #4CAF50;
+        }
+        #notification.error {
+            background-color: #f44336;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Video MetaClean</h1>
-        <div class="controls">
-            <select id="directorySelect" onchange="updateInputField(this.value)">
-                <option value="">-- Select Directory --</option>
-            </select>
-            <input type="text" id="directoryInput" placeholder="Enter directory path or select from dropdown">
-            <button onclick="scanDirectory()">Scan Directory</button>
+        <h1>(5) Video MetaClean</h1>
+        <p><strong>About:</strong> This application scans video files in a specified directory for metadata such as 'Title' and 'Comments'. It allows users to clean this metadata from selected files to maintain privacy or organize media collections.</p>
+        <p>Select or enter a directory path to scan for video files with metadata.</p>
+        <select id="directorySelect" class="input-field">
+            <option value="">-- Select a Directory --</option>
+            <!-- Directories will be populated here -->
+        </select>
+        <input type="text" id="directoryInput" class="input-field" placeholder="Or enter custom directory path">
+        <p class="note">Select from available directories or type a specific path within allowed directories.</p>
+        <button class="button" id="scanButton">Scan Directory</button>
+        <p id="status">Ready</p>
+        <p>Total files scanned: <span id="totalFiles">0</span> | Files with metadata: <span id="metadataFiles">0</span></p>
+        
+        <button class="button" id="selectAllButton">Select All</button>
+        <button class="button" id="cleanSelectedButton">Clean Selected Metadata</button>
+        
+        <div class="results-container">
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>Select</th>
+                        <th>File Name</th>
+                        <th>Title</th>
+                        <th>Comments</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody">
+                    <!-- Results will be populated here -->
+                </tbody>
+            </table>
         </div>
-        <div id="scanStatus"></div>
-        <div id="resultsCount"></div>
-        <div class="controls">
-            <button id="selectAllBtn" onclick="selectAll()" style="display: none;">Select All</button>
-            <button id="deselectAllBtn" onclick="deselectAll()" style="display: none;">Deselect All</button>
-            <button id="cleanBtn" onclick="cleanMetadata()" style="display: none;">Clean Metadata</button>
-        </div>
-        <div id="cleanStatus"></div>
-        <div class="results" id="resultsTable"></div>
     </div>
-    <div id="tooltip" class="tooltip"></div>
+    <div id="notification"></div>
     <script src="app.js"></script>
-    <script>
-        // Show tooltip on hover
-        document.addEventListener('mousemove', function(e) {
-            const tooltip = document.getElementById('tooltip');
-            const target = e.target.tagName === 'TD' ? e.target : e.target.closest('td');
-            if (target && target.querySelector('.tooltip')) {
-                const tooltipContent = target.querySelector('.tooltip');
-                tooltip.textContent = tooltipContent.textContent;
-                tooltip.style.display = 'block';
-                tooltip.style.left = e.pageX + 10 + 'px';
-                tooltip.style.top = e.pageY + 10 + 'px';
-            } else {
-                tooltip.style.display = 'none';
-            }
-        });
-    </script>
 </body>
 </html>

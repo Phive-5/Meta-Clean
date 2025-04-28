@@ -29,7 +29,8 @@ Phive-MetaClean-Docker is a Dockerized application designed to scan video files 
    - Use the following configuration:
      - **Repository**: `galvatrondeva/phive-metaclean-docker:latest`
      - **Port Mappings**: Map container port `3000` to a host port of your choice (e.g., `3005`).
-     - **Volume Mappings**: Map your media directories (e.g., `/Movies`, `/TV Shows`) to the container with the same paths.
+     - **Volume Mappings**: Map your media directories (e.g., `/mnt/dl`) to the container with the same paths.
+     - **Environment Variables**: Set `BASE_DIRS` to a comma-separated list of directories (e.g., `/mnt/dl`).
    - Start the container.
 
 3. **Access the Web Interface**:
@@ -57,7 +58,7 @@ To contribute or modify the application:
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/yourusername/phive-metaclean-docker.git
+   git clone https://github.com/galvatrondeva/phive-metaclean-docker.git
    cd phive-metaclean-docker
    ```
 
@@ -66,11 +67,12 @@ To contribute or modify the application:
      - `server.js`: Backend logic for scanning and cleaning.
      - `public/app.js`: Frontend JavaScript for UI interaction.
      - `public/index.html`: HTML for the web interface.
+     - `clean_metadata.py`: Python script for metadata cleaning.
 
 3. **Build and Test Locally**:
    ```bash
    docker build -t phive-metaclean-docker:test .
-   docker run -p 3000:3000 phive-metaclean-docker:test
+   docker run -p 3005:3000 -v F:/DL:/mnt/dl -e BASE_DIRS=/mnt/dl phive-metaclean-docker:test
    ```
 
 4. **Push Changes**:
@@ -79,8 +81,8 @@ To contribute or modify the application:
 
 ## License
 
-[Specify your license here, e.g., MIT, GPL, etc.]
+MIT License
 
 ## Contact
 
-For support or inquiries, please open an issue on the GitHub repository or contact [your contact information].
+For support or inquiries, please open an issue on the GitHub repository or contact the maintainers.

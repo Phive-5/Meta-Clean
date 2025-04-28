@@ -1,190 +1,322 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // Load available directories
-    fetch('/api/directories')
-        .then(response => response.json())
-        .then(data => {
-            const select = document.getElementById('directorySelect');
-            data.directories.forEach(dir => {
-                const option = document.createElement('option');
-                option.value = dir;
-                option.textContent = dir;
-                select.appendChild(option);
-            });
-        })
-        .catch(error => {
-            console.error('Error fetching directories:', error);
-            document.getElementById('status').textContent = 'Error loading directories. Please enter manually.';
-        });
+document.addEventListener('DOMContentLoaded', () => {
+    const scanButton = document.getElementById('scanButton');
+    const cleanButton = document.getElementById('cleanSelectedButton');
+    const directorySelect = document.getElementById('directorySelect');
+    const statusDiv = document.getElementById('status');
+    const toggleAllCheckbox = document.getElementById('selectAllButton');
+    const notificationDiv = document.getElementById('notification');
+    let isScanning = false;
+    let isCleaning = false;
+    let animationInterval;
 
+    /**
+     * Updates the status message with animated dots to indicate ongoing operations.
+     * @param {string} message - The status message to display.
+     */
+    function updateStatus(message) {
+        statusDiv.textContent = message;
+        statusDiv.classList.add('loading');
+        let dots = 0;
+        if (animationInterval) {
+            clearInterval(animationInterval);
+        }
+        animationInterval = setInterval(() => {
+            if ((isScanning || isCleaning) && (statusDiv.textContent.startsWith('Scanning') || statusDiv.textContent.startsWith('Cleaning'))) {
+                dots = (dots + 1) % 4;
+                statusDiv.textContent = message + '.'.repeat(dots);
+            } else {
+                clearInterval(animationInterval);
+            }
+        }, 500);
+    }
+
+    /**
+     * Clears the status message and stops any ongoing animation.
+     */
+    function clearStatus() {
+        statusDiv.textContent = 'Idle';
+        statusDiv.classList.remove('loading');
+        if (animationInterval) {
+            clearInterval(animationInterval);
+        }
+    }
+
+    /**
+     * Displays a temporary notification message to the user.
+     * @param {string} message - The message to display.
+     * @param {string} type - The type of notification ('success' or 'error').
+     */
+    function showNotification(message, type = 'success') {
+        notificationDiv.textContent = message;
+        notificationDiv.classList.add(type === 'success' ? 'success' : 'error');
+        notificationDiv.style.display = 'block';
+        setTimeout(() => {
+            notificationDiv.style.display = 'none';
+            notificationDiv.classList.remove('success', 'error');
+        }, 3000);
+    }
+
+    /**
+     * Disables UI controls during operations to prevent multiple actions.
+     */
+    function disableControls() {
+        scanButton.disabled = true;
+        cleanButton.disabled = true;
+        directorySelect.disabled = true;
+    }
+
+    /**
+     * Enables UI controls after operations complete.
+     */
+    function enableControls() {
+        scanButton.disabled = false;
+        cleanButton.disabled = false;
+        directorySelect.disabled = false;
+    }
+
+    /**
+     * Fetches the list of directories from the server and populates the dropdown.
+     */
+    async function fetchDirectories() {
+        try {
+            const response = await fetch('/api/directories');
+            const data = await response.json();
+            if (response.ok) {
+                directorySelect.innerHTML = '<option value="">Select a directory</option>';
+                data.directories.forEach(dir => {
+                    const option = document.createElement('option');
+                    option.value = dir;
+                    option.textContent = dir;
+                    directorySelect.appendChild(option);
+                });
+            } else {
+                showNotification(`Error fetching directories: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            showNotification(`Error fetching directories: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Binds event listeners to UI elements for user interactions.
+     */
+    function bindEventListeners() {
+        scanButton.addEventListener('click', scanDirectory);
+        toggleAllCheckbox.addEventListener('click', selectAll);
+        cleanButton.addEventListener('click', cleanSelected);
+        directorySelect.addEventListener('change', function() {
+            updateInputField(this.value);
+        });
+    }
+
+    /**
+     * Updates the directory input field with the selected value from the dropdown.
+     * @param {string} value - The directory path to set in the input field.
+     */
     function updateInputField(value) {
         document.getElementById('directoryInput').value = value;
     }
 
+    /**
+     * Initiates a scan of the selected directory for video files with metadata.
+     */
     function scanDirectory() {
         console.log('scanDirectory function called');
-        const directory = document.getElementById('directoryInput').value;
-        console.log('Directory to scan:', directory);
+        const directory = document.getElementById('directoryInput').value || directorySelect.value;
         if (!directory) {
-            console.log('No directory provided');
-            document.getElementById('status').textContent = 'Please select or enter a directory path.';
+            document.getElementById('status').textContent = 'Please enter or select a directory.';
+            stopDotAnimation();
+            showNotification('Please select a directory', 'error');
             return;
         }
-
-        console.log('Sending POST request to /api/scan for directory:', directory);
+        document.getElementById('status').textContent = 'Scanning directory...';
+        startDotAnimation('Scanning directory');
+        console.log('Sending POST request to /api/scan with directory:', directory);
         fetch('/api/scan', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ directory: directory }),
+            body: JSON.stringify({ directory })
         })
-            .then(response => {
-                console.log('Scan response received:', response.status);
-                return response.json();
-            })
-            .then(data => {
-                console.log('Scan data received:', data);
-                if (data.error) {
-                    console.log('Scan error received:', data.error);
-                    document.getElementById('status').textContent = 'Error scanning directory: ' + data.error;
-                    return;
-                }
-
-                document.getElementById('status').textContent = 'Scan complete.';
-                document.getElementById('totalFiles').textContent = data.files_scanned;
-                document.getElementById('metadataFiles').textContent = data.files_with_metadata;
-                displayResults(data.video_files);
-            })
-            .catch(error => {
-                console.error('Error during scan request:', error);
-                document.getElementById('status').textContent = 'Error scanning directory: ' + error.message;
-            });
+        .then(response => {
+            console.log('Response received from /api/scan', response);
+            if (!response.ok) {
+                return response.json().then(errorData => {
+                    throw new Error(errorData.error || 'Unknown error');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Scan results received:', data);
+            document.getElementById('status').textContent = 'Scan complete.';
+            // Check the structure of the response
+            let files = [];
+            if (Array.isArray(data)) {
+                files = data;
+            } else if (data.video_files && Array.isArray(data.video_files)) {
+                files = data.video_files;
+            } else {
+                console.error('Unexpected data structure from server:', data);
+                document.getElementById('status').textContent = 'Error: Unexpected data format from server.';
+                return;
+            }
+            document.getElementById('totalFiles').textContent = data.files_scanned || files.length;
+            displayResults(files);
+            stopDotAnimation();
+            clearStatus(); // Clear status message after scan completes
+            showNotification(`Scan completed: ${data.files_scanned} file(s) scanned`);
+        })
+        .catch(error => {
+            console.error('Error scanning directory:', error);
+            if (error.message.includes('access denied')) {
+                document.getElementById('status').textContent = 'Error: Access denied to the specified directory.';
+            } else if (error.message.includes('No video files found')) {
+                document.getElementById('status').textContent = 'No video files found in the directory.';
+            } else {
+                document.getElementById('status').textContent = `Error scanning directory: ${error.message}`;
+            }
+            stopDotAnimation();
+            showNotification(`Error: ${error.message}`, 'error');
+        });
     }
 
+    /**
+     * Displays the scan results in the table format on the UI.
+     * @param {Array} files - List of file objects with metadata to display.
+     */
     function displayResults(files) {
-        console.log('Displaying results for', files.length, 'files');
+        console.log('Displaying scan results');
         const tbody = document.getElementById('resultsBody');
         tbody.innerHTML = '';
-
-        files.forEach((file, index) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><input type="checkbox" id="file_${index}" value="${file.path}"></td>
-                <td title="${file.filename}">${file.filename}</td>
-                <td title="${file.title || 'N/A'}">${file.title || 'N/A'}</td>
-                <td title="${file.comments || 'N/A'}">${file.comments || 'N/A'}</td>
-            `;
-            tbody.appendChild(row);
-        });
-        
-        // Store files for sorting
-        window.currentFiles = files;
-        setupSorting();
-    }
-
-    function setupSorting() {
-        const headers = ['filename', 'title', 'comments'];
-        headers.forEach((header, index) => {
-            const th = document.getElementsByTagName('th')[index + 1]; // +1 to skip 'Select' column
-            th.style.cursor = 'pointer';
-            th.onclick = function() {
-                sortTable(header);
-            };
-        });
-    }
-
-    function sortTable(key) {
-        const files = window.currentFiles;
-        const tbody = document.getElementById('resultsBody');
-        let direction = 1;
-        if (tbody.dataset.sortKey === key) {
-            direction = tbody.dataset.sortDirection === 'asc' ? -1 : 1;
+        let metadataCount = 0;
+        if (Array.isArray(files)) {
+            files.forEach((file, index) => {
+                if (file.title || file.comment || file.comments) {
+                    metadataCount++;
+                    const row = document.createElement('tr');
+                    row.id = `row-${index}`;
+                    row.innerHTML = `
+                        <td><input type="checkbox" id="check-${index}" onchange="toggleRowSelection(${index})"></td>
+                        <td>${file.name || file.filename || 'Unknown'}
+                            <div class="tooltip">Path: ${file.path}</div>
+                        </td>
+                        <td>${file.title || ''}</td>
+                        <td>${file.comment || file.comments || ''}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+            });
+        } else {
+            console.error('Files is not an array:', files);
+            document.getElementById('status').textContent = 'Error: No valid file data to display.';
         }
-        tbody.dataset.sortKey = key;
-        tbody.dataset.sortDirection = direction === 1 ? 'asc' : 'desc';
-
-        files.sort((a, b) => {
-            let valA = a[key] || '';
-            let valB = b[key] || '';
-            if (typeof valA === 'string') valA = valA.toLowerCase();
-            if (typeof valB === 'string') valB = valB.toLowerCase();
-            return valA > valB ? direction : -direction;
-        });
-
-        tbody.innerHTML = '';
-        files.forEach((file, index) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><input type="checkbox" id="file_${index}" value="${file.path}"></td>
-                <td title="${file.filename}">${file.filename}</td>
-                <td title="${file.title || 'N/A'}">${file.title || 'N/A'}</td>
-                <td title="${file.comments || 'N/A'}">${file.comments || 'N/A'}</td>
-            `;
-            tbody.appendChild(row);
-        });
+        document.getElementById('metadataFiles').textContent = metadataCount;
+        console.log(`Total files: ${files.length}, Files with metadata: ${metadataCount}`);
     }
 
+    /**
+     * Toggles the selection state of a row in the results table.
+     * @param {number} index - The index of the row to toggle.
+     */
+    function toggleRowSelection(index) {
+        const row = document.getElementById(`row-${index}`);
+        const checkbox = document.getElementById(`check-${index}`);
+        if (checkbox.checked) {
+            row.classList.add('selected');
+        } else {
+            row.classList.remove('selected');
+        }
+    }
+
+    /**
+     * Selects all rows in the results table for cleaning.
+     */
     function selectAll() {
+        console.log('Selecting all rows');
         const checkboxes = document.querySelectorAll('#resultsTable input[type="checkbox"]');
-        checkboxes.forEach(checkbox => checkbox.checked = true);
+        checkboxes.forEach((checkbox, index) => {
+            checkbox.checked = true;
+            document.getElementById(`row-${index}`).classList.add('selected');
+        });
     }
 
+    /**
+     * Initiates cleaning of metadata for selected files.
+     */
     function cleanSelected() {
+        console.log('Cleaning metadata for selected files');
+        const selectedFiles = [];
         const checkboxes = document.querySelectorAll('#resultsTable input[type="checkbox"]:checked');
-        const selectedFiles = Array.from(checkboxes).map(checkbox => checkbox.value);
-        const status = document.getElementById('status');
-
+        checkboxes.forEach(checkbox => {
+            const row = checkbox.closest('tr');
+            const filePath = row.cells[1].querySelector('.tooltip').textContent.split(': ')[1];
+            selectedFiles.push(filePath);
+        });
         if (selectedFiles.length === 0) {
-            status.textContent = 'No files selected to clean.';
+            document.getElementById('status').textContent = 'No files selected for cleaning.';
+            stopDotAnimation();
+            showNotification('No files selected for cleaning', 'error');
             return;
         }
-
-        console.log('Sending POST request to /api/clean for files:', selectedFiles);
+        document.getElementById('status').textContent = 'Cleaning metadata... Please be patient';
+        startDotAnimation('Cleaning metadata');
+        console.log('Sending POST request to /api/clean with files:', selectedFiles);
         fetch('/api/clean', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ files: selectedFiles }),
+            body: JSON.stringify({ files: selectedFiles })
         })
-            .then(response => {
-                console.log('Clean response received:', response.status);
-                return response.json();
-            })
-            .then(data => {
-                console.log('Clean data received:', data);
-                status.textContent = `Cleaned metadata for ${data.cleaned_files.length} files.`;
-                if (data.errors.length > 0) {
-                    status.textContent += ` Errors occurred for ${data.errors.length} files. Check console for details.`;
-                    console.error('Errors during cleaning:', data.errors);
-                }
-                // Refresh the results after cleaning
-                scanDirectory();
-            })
-            .catch(error => {
-                console.error('Error during clean request:', error);
-                status.textContent = 'Error cleaning metadata: ' + error.message;
-            });
+        .then(response => {
+            console.log('Response received from /api/clean', response);
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Cleaning results received:', data);
+            document.getElementById('status').textContent = data.message;
+            scanDirectory();
+            stopDotAnimation();
+            showNotification(data.message);
+        })
+        .catch(error => {
+            console.error('Error cleaning metadata:', error);
+            document.getElementById('status').textContent = 'Error cleaning metadata.';
+            stopDotAnimation();
+            showNotification(`Error: ${error.message}`, 'error');
+        });
     }
 
-    // ASCII spinner for visual feedback
-    const spinnerFrames = ['-', '\\', '|', '/'];
-    let spinnerIndex = 0;
-    let spinnerInterval;
-
-    function startSpinner(statusElement, baseText) {
-        statusElement.textContent = `${baseText} ${spinnerFrames[spinnerIndex]}`;
-        spinnerInterval = setInterval(() => {
-            spinnerIndex = (spinnerIndex + 1) % spinnerFrames.length;
-            statusElement.textContent = `${baseText} ${spinnerFrames[spinnerIndex]}`;
-        }, 100);
-    }
-
-    function stopSpinner(statusElement, finalMessage) {
-        if (spinnerInterval) {
-            clearInterval(spinnerInterval);
-            spinnerInterval = null;
+    /**
+     * Starts the dot animation for status indication during operations.
+     * @param {string} text - The text to display with the animation.
+     */
+    function startDotAnimation(text) {
+        const statusElement = document.getElementById('status');
+        statusElement.textContent = text;
+        const dotElement = document.getElementById('dot');
+        if (dotElement) {
+            dotElement.classList.add('animate');
         }
-        statusElement.textContent = finalMessage;
     }
+
+    /**
+     * Stops the dot animation after operations complete.
+     */
+    function stopDotAnimation() {
+        const dotElement = document.getElementById('dot');
+        if (dotElement) {
+            dotElement.classList.remove('animate');
+        }
+    }
+
+    // Initialize status
+    clearStatus();
+    fetchDirectories();
+    bindEventListeners();
 });
