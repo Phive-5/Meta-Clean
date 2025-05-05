@@ -7,13 +7,11 @@ import subprocess
 import tempfile
 import shutil
 from mutagen.mp4 import MP4, MP4Cover
-from mutagen.id3 import ID3, TIT2, COMM
-from mutagen.flac import FLAC
-from mutagen.oggvorbis import OggVorbis
 
 """
-Cleans metadata from various video and audio file formats.
+Cleans metadata from various video file formats.
 Returns a JSON response with the status of the operation.
+This script focuses exclusively on video formats as per the application scope.
 """
 def clean_metadata(file_path):
     try:
@@ -32,7 +30,26 @@ def clean_metadata(file_path):
             video.save()
             return {'status': 'success', 'message': f'Cleaned metadata for {file_path}'}
         
-        elif ext in ['.mkv', '.avi', '.wmv', '.mov', '.flv', '.webm']:
+        elif ext in ['.mkv']:
+            # Use mkvpropedit from MKVToolNix to remove metadata in-place
+            # Note: 'comment' is not a valid direct property, focusing on title
+            command = ['mkvpropedit', file_path, '--edit', 'info', '--delete', 'title']
+            print(f"Debug: Attempting to run command: {command}", file=sys.stderr)
+            try:
+                result = subprocess.run(command, capture_output=True, text=True)
+                if result.returncode == 0:
+                    return {'status': 'success', 'message': f'Cleaned metadata for {file_path} using mkvpropedit'}
+                else:
+                    error_msg = result.stderr if result.stderr else 'Unknown error'
+                    if result.stdout:
+                        error_msg += f" (stdout: {result.stdout})"
+                    return {'status': 'error', 'message': f'Error cleaning metadata for {file_path} using mkvpropedit: {error_msg}'}
+            except FileNotFoundError:
+                return {'status': 'error', 'message': f'Error cleaning metadata for {file_path}: mkvpropedit not found in system path'}
+            except Exception as e:
+                return {'status': 'error', 'message': f'Error cleaning metadata for {file_path} using mkvpropedit: {str(e)}'}
+        
+        elif ext in ['.avi', '.wmv', '.mov', '.flv', '.webm']:
             # Use ffmpeg to create a copy of the video without metadata
             temp_file = tempfile.mktemp(suffix=ext)
             command = ['ffmpeg', '-i', file_path, '-map_metadata', '-1', '-c', 'copy', temp_file]
@@ -47,53 +64,19 @@ def clean_metadata(file_path):
                     os.remove(temp_file)
                 return {'status': 'error', 'message': f'Error cleaning metadata for {file_path} using ffmpeg: {result.stderr}'}
         
-        elif ext in ['.mp3']:
-            audio = ID3(file_path)
-            # Remove title and comments
-            audio.delall('TIT2')
-            audio.delall('COMM')
-            audio.save()
-            return {'status': 'success', 'message': f'Cleaned metadata for {file_path}'}
-        
-        elif ext in ['.flac']:
-            audio = FLAC(file_path)
-            # Remove title and comments
-            if 'title' in audio:
-                del audio['title']
-            if 'comment' in audio:
-                del audio['comment']
-            audio.save()
-            return {'status': 'success', 'message': f'Cleaned metadata for {file_path}'}
-        
-        elif ext in ['.ogg']:
-            audio = OggVorbis(file_path)
-            # Remove title and comments
-            if 'title' in audio:
-                del audio['title']
-            if 'comment' in audio:
-                del audio['comment']
-            audio.save()
-            return {'status': 'success', 'message': f'Cleaned metadata for {file_path}'}
-        
         else:
-            return {'status': 'error', 'message': f'Unsupported file format for {file_path}'}
+            return {'status': 'error', 'message': f'Unsupported video format for {file_path}'}
     except Exception as e:
         return {'status': 'error', 'message': f'Error cleaning metadata for {file_path}: {str(e)}'}
 
-"""
-Main function to handle command line arguments and process multiple files.
-"""
+# Main function to handle command line input
 def main():
     if len(sys.argv) < 2:
-        print(json.dumps([{'status': 'error', 'message': 'No files provided'}]))
-        return
-    
-    results = []
-    for file_path in sys.argv[1:]:
-        result = clean_metadata(file_path)
-        results.append(result)
-    
-    print(json.dumps(results))
+        print(json.dumps({'status': 'error', 'message': 'No file path provided'}))
+        sys.exit(1)
+    file_path = sys.argv[1]
+    result = clean_metadata(file_path)
+    print(json.dumps([result]))
 
 if __name__ == '__main__':
     main()

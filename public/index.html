@@ -167,6 +167,11 @@
         <input type="text" id="directoryInput" class="input-field" placeholder="Or enter custom directory path">
         <p class="note">Select from available directories or type a specific path within allowed directories.</p>
         <button class="button" id="scanButton">Scan Directory</button>
+        <div id="progressContainer" style="display: none; width: 100%; background-color: #333; border-radius: 10px; overflow: hidden; margin-top: 10px;">
+            <div id="progressBar" style="width: 0%; height: 20px; background-color: #4CAF50; position: relative; transition: width 0.3s ease-in-out;">
+                <div id="progressPercentage" style="position: absolute; top: 50%; left: 5px; transform: translateY(-50%); width: 30px; height: 30px; background-color: #4CAF50; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">0%</div>
+            </div>
+        </div>
         <p id="status">Ready</p>
         <p>Total files scanned: <span id="totalFiles">0</span> | Files with metadata: <span id="metadataFiles">0</span></p>
         

@@ -235,29 +235,32 @@ app.post('/api/clean', async (req, res) => {
  * @returns {Promise<Object>} - Result object with success status and error if any.
  */
 async function cleanMetadata(filePath) {
+    console.log(`Executing Python script to clean metadata for: ${filePath}`);
+    // Escape double quotes in the file path to prevent command injection
+    const command = `python3 clean_metadata.py "${filePath.replace(/"/g, '\"')}"`;
+    console.log(`Command: ${command}`);
+    
     return new Promise((resolve) => {
-        console.log(`Executing Python script to clean metadata for: ${filePath}`);
-        const command = `python3 clean_metadata.py "${filePath.replace(/"/g, '\"')}"`;
-        console.log(`Command: ${command}`);
         exec(command, (error, stdout, stderr) => {
             if (error) {
                 console.error(`Error executing Python script for ${filePath}:`, error);
                 console.error(`stderr: ${stderr}`);
-                resolve({ success: false, error: error.message });
-                return;
-            }
-            try {
-                console.log(`Python script output for ${filePath}:`, stdout);
-                const result = JSON.parse(stdout);
-                if (result && result.length > 0 && result[0].status === 'success') {
-                    resolve({ success: true });
-                } else {
-                    resolve({ success: false, error: result[0].message || 'Unknown error from script' });
+                resolve({ success: false, error: stderr || error.message });
+            } else {
+                console.log(`Python script output for ${filePath}: ${stdout}`);
+                console.log(`stderr (if any): ${stderr}`);
+                try {
+                    const result = JSON.parse(stdout);
+                    if (Array.isArray(result) && result.length > 0) {
+                        resolve({ success: result[0].status === 'success', error: result[0].status !== 'success' ? result[0].message : null });
+                    } else {
+                        resolve({ success: false, error: 'Invalid response format from Python script' });
+                    }
+                } catch (parseError) {
+                    console.error(`JSON parse error for ${filePath}:`, parseError);
+                    console.error(`stdout was: ${stdout}`);
+                    resolve({ success: false, error: `Failed to parse script output: ${parseError.message}` });
                 }
-            } catch (parseError) {
-                console.error(`Failed to parse Python script output for ${filePath}:`, parseError);
-                console.error(`stdout was: ${stdout}`);
-                resolve({ success: false, error: 'Failed to parse script output' });
             }
         });
     });

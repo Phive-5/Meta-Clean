@@ -34,11 +34,52 @@ document.addEventListener('DOMContentLoaded', () => {
      * Clears the status message and stops any ongoing animation.
      */
     function clearStatus() {
-        statusDiv.textContent = 'Idle';
+        statusDiv.textContent = 'Ready';
         statusDiv.classList.remove('loading');
         if (animationInterval) {
             clearInterval(animationInterval);
         }
+        updateProgressBar(0); // Reset progress bar when status is cleared
+    }
+
+    /**
+     * Updates the progress bar with the given percentage.
+     * @param {number} percentage - The percentage of completion (0-100).
+     */
+    function updateProgressBar(percentage) {
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressPercentage = document.getElementById('progressPercentage');
+        
+        if (percentage > 0) {
+            progressContainer.style.display = 'block';
+            progressBar.style.width = `${percentage}%`;
+            progressPercentage.textContent = `${Math.round(percentage)}%`;
+        } else {
+            progressContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            progressPercentage.textContent = '0%';
+        }
+    }
+
+    /**
+     * Simulates progress for the scanning operation (placeholder until server-side progress tracking is implemented).
+     */
+    function simulateScanProgress() {
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            if (isScanning) {
+                progress += Math.random() * 10; // Random increment to simulate varying scan speeds
+                if (progress > 90) {
+                    progress = 90; // Cap at 90% until scan completes
+                }
+                updateProgressBar(progress);
+            } else {
+                clearInterval(progressInterval);
+                updateProgressBar(100); // Set to 100% when scan completes
+                setTimeout(() => updateProgressBar(0), 1000); // Reset after a delay
+            }
+        }, 300);
     }
 
     /**
@@ -125,12 +166,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const directory = document.getElementById('directoryInput').value || directorySelect.value;
         if (!directory) {
             document.getElementById('status').textContent = 'Please enter or select a directory.';
-            stopDotAnimation();
             showNotification('Please select a directory', 'error');
             return;
         }
-        document.getElementById('status').textContent = 'Scanning directory...';
-        startDotAnimation('Scanning directory');
+        isScanning = true;
+        updateStatus('Scanning directory');
+        simulateScanProgress(); // Start simulated progress
         console.log('Sending POST request to /api/scan with directory:', directory);
         fetch('/api/scan', {
             method: 'POST',
@@ -150,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(data => {
             console.log('Scan results received:', data);
+            isScanning = false;
             document.getElementById('status').textContent = 'Scan complete.';
             // Check the structure of the response
             let files = [];
@@ -163,13 +205,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             document.getElementById('totalFiles').textContent = data.files_scanned || files.length;
+            document.getElementById('metadataFiles').textContent = data.files_with_metadata || files.length;
             displayResults(files);
-            stopDotAnimation();
             clearStatus(); // Clear status message after scan completes
             showNotification(`Scan completed: ${data.files_scanned} file(s) scanned`);
         })
         .catch(error => {
             console.error('Error scanning directory:', error);
+            isScanning = false;
             if (error.message.includes('access denied')) {
                 document.getElementById('status').textContent = 'Error: Access denied to the specified directory.';
             } else if (error.message.includes('No video files found')) {
@@ -177,7 +220,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 document.getElementById('status').textContent = `Error scanning directory: ${error.message}`;
             }
-            stopDotAnimation();
             showNotification(`Error: ${error.message}`, 'error');
         });
     }
@@ -256,12 +298,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (selectedFiles.length === 0) {
             document.getElementById('status').textContent = 'No files selected for cleaning.';
-            stopDotAnimation();
             showNotification('No files selected for cleaning', 'error');
             return;
         }
         document.getElementById('status').textContent = 'Cleaning metadata... Please be patient';
-        startDotAnimation('Cleaning metadata');
+        updateStatus('Cleaning metadata');
         console.log('Sending POST request to /api/clean with files:', selectedFiles);
         fetch('/api/clean', {
             method: 'POST',
@@ -281,13 +322,12 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Cleaning results received:', data);
             document.getElementById('status').textContent = data.message;
             scanDirectory();
-            stopDotAnimation();
+            clearStatus();
             showNotification(data.message);
         })
         .catch(error => {
             console.error('Error cleaning metadata:', error);
             document.getElementById('status').textContent = 'Error cleaning metadata.';
-            stopDotAnimation();
             showNotification(`Error: ${error.message}`, 'error');
         });
     }
@@ -295,6 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Starts the dot animation for status indication during operations.
      * @param {string} text - The text to display with the animation.
+     * @deprecated This function is no longer used as the dot animation element is not present in the HTML.
      */
     function startDotAnimation(text) {
         const statusElement = document.getElementById('status');
@@ -307,6 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Stops the dot animation after operations complete.
+     * @deprecated This function is no longer used as the dot animation element is not present in the HTML.
      */
     function stopDotAnimation() {
         const dotElement = document.getElementById('dot');
